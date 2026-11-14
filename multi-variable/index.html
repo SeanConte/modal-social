@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi RV Model</title>
+<style>
+  :root {
+    --ink: #1f2328;
+    --ink-2: #4b5563;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --line-2: #d1d5db;
+    --bg: #f6f6f4;
+    --panel: #ffffff;
+    --hover: #f3f4f6;
+    --lucky-bg: #c8e6c9;
+    --unlucky-bg: #ffcdd2;
+    --sel: #111827;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+  }
+  #app { max-width: 1440px; margin: 0 auto; padding: 18px 20px 40px; }
+
+  /* Header + tabs */
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 8px 20px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line-2); margin-bottom: 16px;
+  }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 10px; }
+  .tabs { display: flex; gap: 2px; }
+  .tab {
+    appearance: none; border: 0; background: none; font: inherit; font-weight: 600;
+    color: var(--muted); padding: 8px 12px; margin-bottom: -1px; cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+  /* Controls */
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .group {
+    display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+  .group-title {
+    align-self: stretch; display: flex; align-items: center;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); padding-right: 10px; border-right: 1px solid var(--line);
+  }
+  .field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+  .field input, .field select {
+    font: inherit; font-size: 14px; font-weight: 400; color: var(--ink);
+    width: 92px; padding: 5px 7px; border: 1px solid var(--line-2); border-radius: 6px; background: #fff;
+  }
+  .field select { width: auto; }
+  .field input.wide { width: 230px; }
+  .field input:focus, .field select:focus { outline: 2px solid #93c5fd; outline-offset: 0; border-color: #60a5fa; }
+  .btn {
+    font: inherit; font-weight: 600; padding: 6px 14px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+    border: 1px solid var(--line-2); background: #fff; color: var(--ink);
+  }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .btn.primary:hover { background: #000; }
+  .btn.stop { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+  .progress { flex-basis: 100%; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; display: none; }
+  .progress.on { display: block; }
+  .progress > div { height: 100%; width: 0; background: var(--ink); }
+
+  /* Panels */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+  .panel h2 { font-size: 15px; font-weight: 700; margin: 0; }
+  .sub { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+
+  /* Networks */
+  .net-strip { display: flex; gap: 10px; overflow-x: auto; padding: 10px 2px 4px; }
+  .net-strip > :first-child { margin-left: auto; }
+  .net-strip > :last-child { margin-right: auto; }
+  .net-card {
+    flex: 0 0 auto; padding: 6px; background: #fff; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 8px;
+    transition: box-shadow 120ms ease, border-color 120ms ease;
+  }
+  .net-card:hover { border-color: var(--line-2); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .net-card.hover { border-color: #FFC107; box-shadow: 0 0 0 2px #FFC107; }
+  .net-card.selected { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel); }
+  .net-title { font-size: 12px; font-weight: 700; text-align: center; border-radius: 5px; padding: 2px 6px; margin-bottom: 4px; }
+  .net-canvas { display: block; width: 150px; height: 150px; }
+
+  /* Matrix + plot row */
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; margin-top: 14px; }
+  .matrix-panel { flex: 1.3 1 620px; min-width: 0; }
+  .plot-panel { flex: 1 1 460px; min-width: 0; }
+  .scroll { overflow: auto; max-height: 70vh; margin-top: 10px; border: 1px solid var(--line); border-radius: 6px; }
+
+  table.data {
+    border-collapse: separate; border-spacing: 0; width: max-content;
+    font-size: 12.5px; font-variant-numeric: tabular-nums;
+  }
+  table.data th, table.data td {
+    padding: 5px 8px; text-align: center; white-space: nowrap;
+    border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  table.data th { font-weight: 700; }
+  #matrix thead th { position: sticky; top: 0; z-index: 2; }
+  #matrix th.agent { position: sticky; left: 0; z-index: 1; background: #fafafa; text-align: left; }
+  #matrix th.agent[data-agent] { cursor: pointer; }
+  #matrix thead th.corner { left: 0; z-index: 3; background: #fff; color: var(--muted); font-weight: 600; }
+  #matrix th.k-head, #matrix td[data-agent] { cursor: pointer; }
+  #matrix tfoot th, #matrix tfoot td { border-top: 1px solid var(--line-2); }
+  #matrix tfoot th { line-height: 1.25; }
+  td.lucky { background: var(--lucky-bg); }
+  td.unlucky { background: var(--unlucky-bg); }
+  .col-hl { font-weight: 700; box-shadow: inset 2px 0 0 rgba(0,0,0,0.5), inset -2px 0 0 rgba(0,0,0,0.5); }
+  .row-hl > * { font-weight: 700; box-shadow: inset 0 2px 0 rgba(0,0,0,0.35), inset 0 -2px 0 rgba(0,0,0,0.35); }
+  .row-hl > .col-hl {
+    box-shadow: inset 2px 0 0 rgba(0,0,0,0.5), inset -2px 0 0 rgba(0,0,0,0.5),
+                inset 0 2px 0 rgba(0,0,0,0.35), inset 0 -2px 0 rgba(0,0,0,0.35);
+  }
+  #matrix td.cell-hover { box-shadow: inset 0 0 0 3px #FFC107; }
+  #matrix td.cell-sel { box-shadow: inset 0 0 0 3px #000; }
+
+  /* Plot */
+  .plot-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .runcount { color: var(--muted); font-size: 12.5px; }
+  .linkbtn { appearance: none; border: 0; background: none; padding: 0; font: inherit; font-size: 12.5px; color: #2563eb; cursor: pointer; text-decoration: underline; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px 2px 6px; cursor: pointer;
+    font: inherit; font-size: 12px; color: var(--ink-2); background: #fff;
+    border: 1px solid var(--line); border-radius: 999px;
+  }
+  .chip .sw { width: 10px; height: 10px; border-radius: 2px; }
+  .chip:hover { border-color: var(--line-2); }
+  .chip.selected { border-color: var(--sel); color: var(--ink); font-weight: 700; }
+  .chip.off { opacity: 0.45; text-decoration: line-through; }
+  .plot-box { position: relative; width: 100%; aspect-ratio: 16 / 10; }
+  .plot-box canvas, .cell-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #tip {
+    position: fixed; z-index: 50; pointer-events: none; display: none;
+    background: #fff; border: 1px solid var(--line-2); border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    padding: 6px 9px; font-size: 12px; font-variant-numeric: tabular-nums; max-width: 260px;
+  }
+  #tip .tt-head { color: var(--muted); margin-bottom: 3px; }
+  #tip .tt-row { display: flex; align-items: center; gap: 6px; }
+  #tip .tt-row b { margin-left: auto; padding-left: 12px; }
+  #tip .sw { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+
+  /* Variance */
+  .var-section { margin-top: 18px; }
+  .var-section h3 { font-size: 14px; font-weight: 700; margin: 0 0 8px; }
+  #varTable { margin: 0 auto; }
+  #varTable td, #varTable th { padding: 4px 14px; }
+  #varTable thead th { border-bottom: 1px solid var(--line-2); }
+  #varTable tbody tr[data-k] { cursor: pointer; }
+  #varTable tbody tr[data-k]:hover td { background: var(--hover); }
+  #varTable tbody tr.selected td { font-weight: 700; background: #eef2ff; }
+  .kcell { font-weight: 700; }
+  .note { font-size: 12.5px; color: var(--ink-2); line-height: 1.55; margin: 12px auto 0; max-width: 640px; }
+  .note p { margin: 0 0 6px; }
+
+  /* Grid tab */
+  .caption { color: var(--ink-2); font-size: 13px; margin: 0 0 10px; }
+  .grid-scroll { overflow-x: auto; }
+  .ctgrid { display: grid; gap: 10px; align-items: center; min-width: 600px; }
+  .ctgrid .col-label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); text-align: center; }
+  .ctgrid .row-label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); text-align: right; white-space: nowrap; padding-right: 2px; }
+  .cell-box { position: relative; aspect-ratio: 16 / 10; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  .grid-msg { color: #b91c1c; font-size: 13px; margin: 0 0 10px; }
+
+  [hidden] { display: none !important; }
+
+  @media (max-width: 640px) {
+    #app { padding: 12px 12px 32px; }
+    h1 { font-size: 19px; }
+    .group { width: 100%; }
+    .field input, .field select { width: 78px; }
+    .field input.wide { width: 160px; }
+    .net-canvas { width: 120px; height: 120px; }
+    .plot-box { aspect-ratio: 4 / 3; }
+    .panel { padding: 12px; }
+  }
+
+  /* Multi RV additions */
+  .bold-cell { font-weight: 900 !important; text-decoration: underline; }
+  .matrix-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+  .inline-field { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+  .inline-field select { font: inherit; font-weight: 400; padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: #fff; }
+  .viewing { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-2); }
+  .theory-panel { margin-top: 14px; }
+  #theoryWrap { max-height: 420px; }
+  #theoryWrap thead th { position: sticky; top: 0; z-index: 1; background: #fafafa; }
+  #theoryWrap th.k-head { cursor: pointer; }
+  #theoryTable tr.opt td { background: #f0fdf4; }
+  #theoryTable tr.viewed td { background: #eef2ff; }
+  #theoryTable td:first-child { text-align: left; font-weight: 600; }
+  .empty { color: var(--muted); font-style: italic; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Multi RV Model</h1>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="model" aria-selected="true">Model</button>
+      <button class="tab" role="tab" data-tab="grid" aria-selected="false">Challenging yet tractable</button>
+    </nav>
+  </header>
+
+  <!-- ===================== MODEL TAB ===================== -->
+  <section id="tab-model">
+    <div class="controls">
+      <div class="group">
+        <div class="group-title">Parameters</div>
+        <label class="field">Theories<input type="number" id="numTheories" min="2" step="1" value="50"></label>
+        <label class="field">Avg θ (mean)<input type="number" id="thetaMean" min="0" max="1" step="0.01" value="0.6"></label>
+        <label class="field">Var(θ)<input type="number" id="thetaVar" min="0" max="0.25" step="0.005" value="0.02"></label>
+        <label class="field">Trials/round<input type="number" id="trials" min="1" step="1" value="10"></label>
+        <label class="field">Rounds/run<input type="number" id="roundsPerRun" min="1" step="1" value="5"></label>
+        <label class="field">Population<input type="number" id="population" min="3" step="1" value="10"></label>
+        <label class="field">Mode
+          <select id="mode">
+            <option value="all">All theories each round</option>
+            <option value="preferred">Preferred-only each round</option>
+          </select>
+        </label>
+      </div>
+      <div class="group">
+        <div class="group-title">Single run</div>
+        <button class="btn" id="newRun">New run</button>
+        <button class="btn" id="oneRound">Next round</button>
+        <button class="btn" id="fullRun">Next 5 rounds</button>
+      </div>
+      <div class="group">
+        <div class="group-title">Batch</div>
+        <label class="field">Runs<input type="number" id="iterations" min="1" step="1" value="100"></label>
+        <button class="btn primary" id="runBatch">Run</button>
+        <div class="progress" id="batchProgress"><div></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Network Visualizations</h2>
+      <div class="net-strip" id="netStrip"></div>
+    </div>
+
+    <div class="row">
+      <div class="panel matrix-panel">
+        <div class="matrix-head">
+          <h2>Single Run Results</h2>
+          <label class="inline-field">Matrix view <select id="theorySelect"></select></label>
+        </div>
+        <p class="viewing" id="viewing"></p>
+        <div class="scroll" id="matrix"></div>
+      </div>
+
+      <div class="panel plot-panel">
+        <div class="plot-head">
+          <h2>Results of All Runs</h2>
+          <span class="runcount" id="runCount">0 runs</span>
+          <button class="linkbtn" id="resetRuns" hidden>reset</button>
+        </div>
+        <p class="sub">(separated by network structure, ordered by # of data-lucky agents)</p>
+        <div class="legend" id="legend"></div>
+        <div class="plot-box" id="plotBox"></div>
+
+        <div class="var-section">
+          <h3>Variance by k</h3>
+          <div id="varWrap"></div>
+          <div class="note">
+            <p>Each agent's judgment is 1 if data-lucky (its best-supported theory is the optimal one) and 0 otherwise. For each run, <i>p</i> is the proportion of agents who are data-lucky.</p>
+            <p><b>Social variance</b> (disagreement within runs): the average over runs of <i>p</i>(1 − <i>p</i>).</p>
+            <p><b>Modal variance</b> (unpredictability between runs): the variance of <i>p</i> across runs.</p>
+            <p><b>Total variance</b>: the variance of every agent's judgment across every run. It equals social variance plus modal variance.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel theory-panel">
+      <h2>Theory Panel</h2>
+      <div id="theoryArea"></div>
+    </div>
+  </section>
+
+  <!-- ===================== GRID TAB ===================== -->
+  <section id="tab-grid" hidden>
+    <div class="controls">
+      <div class="group">
+        <div class="group-title">Fixed</div>
+        <label class="field">Avg θ (mean)<input type="number" id="gMean" min="0" max="1" step="0.01" value="0.6"></label>
+        <label class="field">Trials/round<input type="number" id="gTrials" min="1" step="1" value="10"></label>
+        <label class="field">Rounds/run<input type="number" id="gRounds" min="1" step="1" value="5"></label>
+        <label class="field">Population<input type="number" id="gPopulation" min="3" step="1" value="10"></label>
+        <label class="field">Mode
+          <select id="gMode">
+            <option value="all">All theories each round</option>
+            <option value="preferred">Preferred-only each round</option>
+          </select>
+        </label>
+        <label class="field">Runs per panel<input type="number" id="gRuns" min="1" step="1" value="200"></label>
+      </div>
+      <div class="group">
+        <div class="group-title">Varied</div>
+        <label class="field">Theories (rows)<input class="wide" type="text" id="gTheories" value="2, 5, 20, 50"></label>
+        <label class="field">Var(θ) (columns)<input class="wide" type="text" id="gVars" value="0.00025, 0.001, 0.004, 0.016"></label>
+        <button class="btn primary" id="runGrid">Run grid</button>
+        <div class="progress" id="gridProgress"><div></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="caption">Each panel shows the runs ordered by number of data-lucky agents, one line per k, as in the Model tab. Rows vary the number of theories; columns vary Var(θ), the spread of the theories' true success rates. Problems generally get easier toward the top right.</p>
+      <p class="grid-msg" id="gridMsg" hidden></p>
+      <div class="legend" id="gLegend"></div>
+      <div class="grid-scroll"><div class="ctgrid" id="ctgrid"></div></div>
+    </div>
+  </section>
+</div>
+
+<div id="tip"></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   MODEL (same as the original app, except that θ draws outside [0, 1]
+   are redrawn rather than clipped)
+   Each run draws T theories with true success rates θ from a normal
+   distribution truncated to [0, 1]. Each round, every agent runs `trials`
+   trials, either on every theory (mode "all") or on its preferred theory
+   (mode "preferred"). At connectivity k, an agent pools its own data with
+   that of its k nearest neighbors on each side of the ring and picks the
+   theory with the highest pooled success frequency. An agent is
+   data-lucky when that theory is the optimal one.
+   ===================================================================== */
+/* MODEL START */
+function maxKFor(N) { return N % 2 === 0 ? N / 2 : Math.floor(N / 2); }
+
+// Normal draw restricted to [0, 1]. Values outside the range are redrawn
+// (the original clipped them to 0 or 1, which stacked theories at exactly θ = 1).
+function truncatedNormal(mean, variance) {
+  const std = Math.sqrt(Math.max(variance, 1e-9));
+  for (let tries = 0; tries < 100000; tries++) {
+    const u1 = Math.random(), u2 = Math.random();
+    const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    const x = mean + std * z;
+    if (x >= 0 && x <= 1) return x;
+  }
+  return Math.min(1, Math.max(0, mean));
+}
+function sampleThetas(T, m, v) { const arr = new Array(T); for (let t = 0; t < T; t++) arr[t] = truncatedNormal(m, v); return arr; }
+function argmax(arr) { let bi = 0, bv = -Infinity; for (let i = 0; i < arr.length; i++) { if (arr[i] > bv) { bv = arr[i]; bi = i; } } return bi; }
+
+function neighborhoodIndices(N, i, k) {
+  const indices = [];
+  if (k === 0) return [i];
+  const visited = new Set([i]);
+  indices.push(i);
+  for (let d = 1; d <= k; d++) {
+    const j1 = (i + d) % N, j2 = (i - d + N) % N;
+    if (!visited.has(j1)) { visited.add(j1); indices.push(j1); }
+    if (!visited.has(j2)) { visited.add(j2); indices.push(j2); }
+  }
+  return indices;
+}
+
+function newRun(T, thetaMean, thetaVar, N) {
+  const thetas = sampleThetas(T, thetaMean, thetaVar);
+  return {
+    thetas,
+    opt: argmax(thetas),
+    succ: Array.from({ length: N }, () => new Array(T).fill(0)),   // [agent][theory] cumulative successes
+    tot: Array.from({ length: N }, () => new Array(T).fill(0)),    // [agent][theory] cumulative trials
+    rounds: 0
+  };
+}
+
+function preferredTheoryForAgent(run, i, trials) {
+  const T = run.thetas.length;
+  let best = [0]; let bestVal = -1;
+  for (let t = 0; t < T; t++) {
+    const denom = Math.max(1, run.rounds * trials);
+    const f = run.succ[i][t] / denom;
+    if (f > bestVal) { bestVal = f; best = [t]; }
+    else if (f === bestVal) { best.push(t); }
+  }
+  return best[Math.floor(Math.random() * best.length)];
+}
+
+function doOneRound(run, mode, trials) {
+  const N = run.succ.length, T = run.thetas.length;
+  for (let i = 0; i < N; i++) {
+    if (mode === 'all') {
+      for (let t = 0; t < T; t++) {
+        for (let r = 0; r < trials; r++) if (Math.random() < run.thetas[t]) run.succ[i][t]++;
+        run.tot[i][t] += trials;
+      }
+    } else {
+      const tStar = (run.rounds === 0) ? Math.floor(Math.random() * T) : preferredTheoryForAgent(run, i, trials);
+      for (let r = 0; r < trials; r++) if (Math.random() < run.thetas[tStar]) run.succ[i][tStar]++;
+      run.tot[i][tStar] += trials;
+    }
+  }
+  run.rounds++;
+}
+
+// Full agent-by-k-by-theory pooled frequencies for one run (what the matrix displays).
+function deriveRun(run) {
+  const N = run.succ.length, T = run.thetas.length, maxK = maxKFor(N);
+  const tensor = Array.from({ length: N }, () => Array.from({ length: maxK + 1 }, () => new Array(T).fill(0)));
+  const luckyByK = Array.from({ length: maxK + 1 }, () => new Array(N).fill(false));
+  const bestIdxByK = Array.from({ length: maxK + 1 }, () => new Array(N).fill(0));
+  for (let k = 0; k <= maxK; k++) {
+    for (let i = 0; i < N; i++) {
+      const neigh = neighborhoodIndices(N, i, k);
+      const pooledSucc = new Array(T).fill(0);
+      const pooledTot = new Array(T).fill(0);
+      for (const j of neigh) {
+        for (let t = 0; t < T; t++) { pooledSucc[t] += run.succ[j][t]; pooledTot[t] += run.tot[j][t]; }
+      }
+      const pooledFreq = new Array(T).fill(0);
+      for (let t = 0; t < T; t++) pooledFreq[t] = pooledTot[t] > 0 ? (pooledSucc[t] / pooledTot[t]) : 0.0;
+      for (let t = 0; t < T; t++) tensor[i][k][t] = pooledFreq[t];
+      const bestT = argmax(pooledFreq);
+      bestIdxByK[k][i] = bestT;
+      if (bestT === run.opt) luckyByK[k][i] = true;
+    }
+  }
+  const counts = luckyByK.map(row => row.reduce((a, b) => a + (b ? 1 : 0), 0));
+  return { tensor, luckyByK, bestIdxByK, counts };
+}
+
+// Number of data-lucky agents at each k for one run. Same quantity as
+// deriveRun(...).counts, computed by growing each neighborhood one step at a time.
+function luckyCounts(run) {
+  const N = run.succ.length, T = run.thetas.length, maxK = maxKFor(N);
+  const counts = new Array(maxK + 1).fill(0);
+  const ps = new Float64Array(T), pt = new Float64Array(T);
+  for (let i = 0; i < N; i++) {
+    for (let t = 0; t < T; t++) { ps[t] = run.succ[i][t]; pt[t] = run.tot[i][t]; }
+    for (let k = 0; k <= maxK; k++) {
+      if (k > 0) {
+        const a = (i + k) % N, b = (i - k + N) % N;
+        for (let t = 0; t < T; t++) { ps[t] += run.succ[a][t]; pt[t] += run.tot[a][t]; }
+        if (b !== a) for (let t = 0; t < T; t++) { ps[t] += run.succ[b][t]; pt[t] += run.tot[b][t]; }
+      }
+      let bi = 0, bv = -Infinity;
+      for (let t = 0; t < T; t++) {
+        const f = pt[t] > 0 ? (ps[t] / pt[t]) : 0.0;
+        if (f > bv) { bv = f; bi = t; }
+      }
+      if (bi === run.opt) counts[k]++;
+    }
+  }
+  return counts;
+}
+
+// Social, modal, and total variance of the binary judgments, per k.
+function varianceByK(runs, N, K) {
+  const out = [];
+  for (let k = 0; k < K; k++) {
+    const ps = runs.map(c => c[k] / N);
+    const R = ps.length;
+    if (R === 0) { out.push(null); continue; }
+    let social = 0, pbar = 0;
+    for (const p of ps) { social += p * (1 - p); pbar += p; }
+    social /= R; pbar /= R;
+    let modal = 0;
+    for (const p of ps) modal += (p - pbar) * (p - pbar);
+    modal /= R;
+    // Mean of all N·R judgments is pbar, so their variance is pbar(1 − pbar).
+    const total = pbar * (1 - pbar);
+    out.push({ social, modal, total });
+  }
+  return out;
+}
+/* MODEL END */
+
+/* =====================================================================
+   SHARED UI HELPERS
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+const NODE_LUCKY = '#4CAF50', NODE_UNLUCKY = '#EF5350', NODE_NEUTRAL = '#D9D9D9', NODE_HALO = '#FFC107';
+
+const VIRIDIS = ['#440154', '#482475', '#414487', '#355f8d', '#2a788e', '#21918c',
+                 '#22a884', '#44bf70', '#7ad151', '#bddf26', '#fde725'].map(h => {
+  const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255];
+});
+const kColorCache = new Map();
+function kColor(k, total) {
+  const key = k + '/' + total;
+  if (kColorCache.has(key)) return kColorCache.get(key);
+  const t = total <= 1 ? 0 : k / (total - 1);
+  const x = t * (VIRIDIS.length - 1);
+  const i = Math.min(Math.floor(x), VIRIDIS.length - 2), f = x - i;
+  const rgb = VIRIDIS[i].map((v, j) => Math.round(v + (VIRIDIS[i + 1][j] - v) * f));
+  const lin = rgb.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  const L = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  const out = { fill: `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`, ink: L < 0.179 ? '#fff' : '#111' };
+  kColorCache.set(key, out);
+  return out;
+}
+
+// Size a canvas's backing store to its CSS size times the device pixel ratio.
+function fitCanvas(canvas, cssW, cssH) {
+  const d = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(cssW * d)), h = Math.max(1, Math.round(cssH * d));
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  return ctx;
+}
+
+function intTicks(lo, hi, target) {
+  if (hi <= lo) return [lo];
+  const raw = (hi - lo) / Math.max(1, target);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = Math.max(1, Math.ceil([1, 2, 5, 10].map(m => m * mag).find(s => s >= raw)));
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) out.push(v);
+  return out;
+}
+
+const tip = $('tip');
+function showTip(html, cx, cy) {
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  const r = tip.getBoundingClientRect();
+  let x = cx + 14, y = cy + 14;
+  if (x + r.width > window.innerWidth - 6) x = cx - r.width - 14;
+  if (y + r.height > window.innerHeight - 6) y = cy - r.height - 14;
+  tip.style.left = Math.max(6, x) + 'px';
+  tip.style.top = Math.max(6, y) + 'px';
+}
+function hideTip() { tip.style.display = 'none'; }
+
+function sortedSeries(runs, K) {
+  const out = [];
+  for (let k = 0; k < K; k++) out.push(runs.map(c => c[k]).sort((a, b) => a - b));
+  return out;
+}
+
+const NO_HIDDEN = new Set();
+
+/* Sorted-runs plot: one line per k, runs ordered by number of data-lucky agents. */
+class RunsPlot {
+  constructor(box, opts) {
+    this.box = box;
+    this.opts = Object.assign({ compact: false, label: '', getSelK: () => null, getHidden: () => NO_HIDDEN }, opts);
+    this.canvas = document.createElement('canvas');
+    box.appendChild(this.canvas);
+    this.series = [];
+    this.yMax = 10;
+    this.hover = null;
+    this.ro = new ResizeObserver(() => this.draw());
+    this.ro.observe(box);
+    this.canvas.addEventListener('mousemove', e => this.onMove(e));
+    this.canvas.addEventListener('mouseleave', () => { this.hover = null; hideTip(); this.draw(); });
+  }
+  destroy() { this.ro.disconnect(); this.canvas.remove(); }
+  setData(series, yMax) {
+    this.series = series; this.yMax = yMax;
+    if (this.hover !== null && this.hover >= this.count()) this.hover = null;
+    this.draw();
+  }
+  count() { return this.series.reduce((m, s) => Math.max(m, s.length), 0); }
+  pad() { return this.opts.compact ? { l: 24, r: 7, t: 7, b: 7 } : { l: 46, r: 14, t: 10, b: 42 }; }
+  draw() {
+    const w = this.box.clientWidth, h = this.box.clientHeight;
+    if (!w || !h) return;
+    const ctx = fitCanvas(this.canvas, w, h);
+    ctx.clearRect(0, 0, w, h);
+    const p = this.pad(), pw = w - p.l - p.r, ph = h - p.t - p.b;
+    const R = this.count(), K = this.series.length, sel = this.opts.getSelK(), hidden = this.opts.getHidden();
+    const compact = this.opts.compact;
+    const X = i => R <= 1 ? p.l + pw / 2 : p.l + (i / (R - 1)) * pw;
+    const Y = v => p.t + (1 - v / this.yMax) * ph;
+
+    // gridlines and axes
+    ctx.font = `${compact ? 10 : 11}px ${FONT}`;
+    ctx.textBaseline = 'middle';
+    const yt = compact ? [0, this.yMax] : intTicks(0, this.yMax, 6);
+    for (const v of yt) {
+      const y = Math.round(Y(v)) + 0.5;
+      ctx.strokeStyle = v === 0 ? '#9ca3af' : '#eceef1';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(p.l, y); ctx.lineTo(w - p.r, y); ctx.stroke();
+      ctx.fillStyle = '#6b7280'; ctx.textAlign = 'right';
+      ctx.fillText(String(v), p.l - 6, y);
+    }
+    if (!compact) {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      if (R > 0) {
+        for (const v of intTicks(1, R, 6)) ctx.fillText(String(v), X(v - 1), h - p.b + 6);
+      }
+      ctx.fillStyle = '#4b5563';
+      ctx.fillText('Sorted index', p.l + pw / 2, h - 16);
+      ctx.save();
+      ctx.translate(12, p.t + ph / 2); ctx.rotate(-Math.PI / 2);
+      ctx.textBaseline = 'middle';
+      ctx.fillText('# data-lucky agents', 0, 0);
+      ctx.restore();
+    }
+    if (R === 0) {
+      ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(compact ? '' : 'No runs yet', p.l + pw / 2, p.t + ph / 2);
+      return;
+    }
+
+    // lines (selected k drawn last and at full strength)
+    const order = [...Array(K).keys()];
+    if (sel !== null && sel < K) { order.splice(sel, 1); order.push(sel); }
+    const showPts = !compact && R <= 40;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (const k of order) {
+      const s = this.series[k];
+      if (!s.length || hidden.has(k)) continue;
+      const c = kColor(k, K).fill;
+      ctx.globalAlpha = (sel === null || sel === k) ? 1 : 0.13;
+      ctx.strokeStyle = c;
+      ctx.lineWidth = compact ? 1.5 : 2;
+      ctx.beginPath();
+      s.forEach((v, i) => { const x = X(i), y = Y(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.stroke();
+      if (showPts || s.length === 1) {
+        ctx.fillStyle = c;
+        for (let i = 0; i < s.length; i++) {
+          ctx.beginPath(); ctx.arc(X(i), Y(s[i]), compact ? 2 : 3, 0, 2 * Math.PI); ctx.fill();
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // crosshair
+    if (this.hover !== null) {
+      const x = Math.round(X(this.hover)) + 0.5;
+      ctx.strokeStyle = 'rgba(17,24,39,0.35)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, p.t); ctx.lineTo(x, h - p.b); ctx.stroke();
+      for (const k of order) {
+        if ((sel !== null && k !== sel) || hidden.has(k)) continue;
+        const v = this.series[k][this.hover];
+        if (v === undefined) continue;
+        ctx.beginPath(); ctx.arc(X(this.hover), Y(v), compact ? 3 : 4, 0, 2 * Math.PI);
+        ctx.fillStyle = kColor(k, K).fill; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+      }
+    }
+  }
+  onMove(e) {
+    const R = this.count();
+    if (!R) { hideTip(); return; }
+    const r = this.canvas.getBoundingClientRect(), p = this.pad();
+    const pw = r.width - p.l - p.r;
+    let i = R <= 1 ? 0 : Math.round(((e.clientX - r.left - p.l) / pw) * (R - 1));
+    i = Math.max(0, Math.min(R - 1, i));
+    if (i !== this.hover) { this.hover = i; this.draw(); }
+    const K = this.series.length, sel = this.opts.getSelK(), hidden = this.opts.getHidden();
+    let html = this.opts.label ? `<div class="tt-head">${this.opts.label}</div>` : '';
+    html += `<div class="tt-head">Run ${i + 1} of ${R} (sorted)</div>`;
+    for (let k = 0; k < K; k++) {
+      if ((sel !== null && k !== sel) || hidden.has(k)) continue;
+      html += `<div class="tt-row"><span class="sw" style="background:${kColor(k, K).fill}"></span>k=${k}<b>${this.series[k][i]}</b></div>`;
+    }
+    showTip(html, e.clientX, e.clientY);
+  }
+}
+
+function buildLegend(el, K, isSelected, hidden) {
+  let h = '';
+  for (let k = 0; k < K; k++) {
+    h += `<button class="chip" data-k="${k}" title="Show or hide this line"><span class="sw" style="background:${kColor(k, K).fill}"></span>k=${k}</button>`;
+  }
+  el.innerHTML = h;
+  styleLegend(el, isSelected(), hidden);
+}
+function styleLegend(el, sel, hidden) {
+  el.querySelectorAll('.chip').forEach(c => {
+    const k = +c.dataset.k;
+    c.classList.toggle('selected', sel === k);
+    c.classList.toggle('off', hidden.has(k));
+  });
+}
+
+function setProgress(el, frac) {
+  el.classList.toggle('on', frac !== null);
+  el.firstElementChild.style.width = frac === null ? '0' : (100 * frac).toFixed(1) + '%';
+}
+
+/* =====================================================================
+   MODEL TAB
+   ===================================================================== */
+const S = {
+  T: 50, mean: 0.6, variance: 0.02, trials: 10, R: 5, N: 10, mode: 'all',
+  runs: [],          // lucky counts per k, one array per completed batch run
+  cur: null,         // the run shown in the matrix, networks and theory panel
+  curFromBatch: false,
+  d: null,           // deriveRun(cur)
+  view: 'optimal',   // theory shown in the matrix
+  selK: null, selAgent: null, selCell: null, hoverCell: null, hidden: new Set(),
+  batch: null
+};
+const K = () => maxKFor(S.N) + 1;
+
+const plot = new RunsPlot($('plotBox'), { getSelK: () => S.selK, getHidden: () => S.hidden });
+const netCards = [];
+
+function readParams() {
+  const T = Number($('numTheories').value);
+  const mean = parseFloat($('thetaMean').value);
+  const variance = parseFloat($('thetaVar').value);
+  const trials = Number($('trials').value);
+  const R = Number($('roundsPerRun').value);
+  const N = Number($('population').value);
+  const mode = $('mode').value;
+  if (!Number.isInteger(T) || T < 2 || T > 1000) return null;
+  if (!Number.isFinite(mean) || mean < 0 || mean > 1) return null;
+  if (!Number.isFinite(variance) || variance < 0 || variance > 0.25) return null;
+  if (!Number.isInteger(trials) || trials < 1) return null;
+  if (!Number.isInteger(R) || R < 1) return null;
+  if (!Number.isInteger(N) || N < 3 || N > 400) return null;
+  return { T, mean, variance, trials, R, N, mode };
+}
+
+// Any parameter change starts over, so runs with different settings never mix.
+function onParamChange() {
+  const p = readParams();
+  if (!p) return;
+  stopBatch();
+  const rebuild = p.N !== S.N || !netCards.length;
+  Object.assign(S, p, { runs: [], cur: null, d: null, curFromBatch: false, view: 'optimal', selCell: null, hoverCell: null });
+  if (S.selK !== null && S.selK >= K()) S.selK = null;
+  if (S.selAgent !== null && S.selAgent >= S.N) S.selAgent = null;
+  $('fullRun').textContent = `Next ${S.R} round${S.R === 1 ? '' : 's'}`;
+  if (rebuild) { buildNetworks(); S.hidden = new Set(); }
+  buildLegend($('legend'), K(), () => S.selK, S.hidden);
+  renderAll();
+}
+
+function resetRuns() {
+  stopBatch();
+  S.runs = []; S.cur = null; S.d = null; S.curFromBatch = false; S.selCell = null;
+  renderAll();
+}
+
+function setCur(run, fromBatch) {
+  S.cur = run;
+  S.curFromBatch = fromBatch;
+  S.d = deriveRun(run);
+}
+
+function startNewRun() {
+  stopBatch();
+  S.selCell = null;
+  setCur(newRun(S.T, S.mean, S.variance, S.N), false);
+  renderAll();
+}
+function stepRounds(n) {
+  stopBatch();
+  const run = S.cur || newRun(S.T, S.mean, S.variance, S.N);
+  const fromBatch = S.cur ? S.curFromBatch : false;
+  for (let r = 0; r < n; r++) doOneRound(run, S.mode, S.trials);
+  setCur(run, fromBatch);
+  renderAll();
+}
+
+function startBatch() {
+  if (S.batch) { stopBatch(); return; }
+  const n = Number($('iterations').value);
+  if (!Number.isInteger(n) || n < 1) return;
+  S.batch = { n, done: 0, raf: 0 };
+  $('runBatch').textContent = 'Stop';
+  $('runBatch').classList.add('stop');
+  setProgress($('batchProgress'), 0);
+  batchTick();
+}
+function batchTick() {
+  const b = S.batch;
+  if (!b) return;
+  const perFrame = Math.max(1, Math.ceil(b.n / 60));   // about a second of animation when runs are cheap
+  const t0 = performance.now();
+  let last = null, c = 0;
+  while (b.done < b.n && c < perFrame && performance.now() - t0 < 40) {
+    const run = newRun(S.T, S.mean, S.variance, S.N);
+    for (let r = 0; r < S.R; r++) doOneRound(run, S.mode, S.trials);
+    S.runs.push(luckyCounts(run));
+    last = run; b.done++; c++;
+  }
+  if (last) setCur(last, true);
+  renderAll();
+  setProgress($('batchProgress'), b.done / b.n);
+  if (b.done >= b.n) stopBatch();
+  else b.raf = requestAnimationFrame(batchTick);
+}
+function stopBatch() {
+  if (!S.batch) return;
+  cancelAnimationFrame(S.batch.raf);
+  S.batch = null;
+  $('runBatch').textContent = 'Run';
+  $('runBatch').classList.remove('stop');
+  setProgress($('batchProgress'), null);
+}
+
+/* ---------- networks ---------- */
+function buildNetworks() {
+  const strip = $('netStrip');
+  strip.innerHTML = '';
+  netCards.length = 0;
+  for (let k = 0; k < K(); k++) {
+    const c = kColor(k, K());
+    const card = document.createElement('div');
+    card.className = 'net-card';
+    card.dataset.k = k;
+    card.innerHTML = `<div class="net-title" style="background:${c.fill};color:${c.ink}">k = ${k}</div>`;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'net-canvas';
+    card.appendChild(canvas);
+    strip.appendChild(card);
+    netCards.push({ card, canvas });
+  }
+}
+
+function nodeColorsFor(k) {
+  if (!S.d) return null;
+  return S.d.luckyByK[k].map(l => l ? NODE_LUCKY : NODE_UNLUCKY);
+}
+function haloFor(k) {
+  const set = new Set();
+  if (S.selAgent !== null) set.add(S.selAgent);
+  if (S.selCell && S.selCell.k === k) set.add(S.selCell.i);
+  if (S.hoverCell && S.hoverCell.k === k) set.add(S.hoverCell.i);
+  return set;
+}
+function paintNetwork(k) {
+  const nc = netCards[k];
+  if (!nc) return;
+  drawNetwork(nc.canvas, S.N, k, kColor(k, K()).fill, nodeColorsFor(k), haloFor(k));
+}
+function paintNetworks() { for (let k = 0; k < netCards.length; k++) paintNetwork(k); }
+
+function drawNetwork(canvas, N, k, accent, nodeColors, halo) {
+  const size = canvas.clientWidth || 150;
+  const ctx = fitCanvas(canvas, size, size);
+  ctx.clearRect(0, 0, size, size);
+  const cx = size / 2, cy = size / 2, r = size * 0.38;
+  const nodeR = Math.max(2, Math.min(6, Math.floor(60 / Math.max(6, N)) * size / 150));
+  const pos = [];
+  for (let i = 0; i < N; i++) {
+    const th = (2 * Math.PI * i) / N - Math.PI / 2;
+    pos.push([cx + r * Math.cos(th), cy + r * Math.sin(th)]);
+  }
+  canvas._geom = { pos, nodeR };
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = accent;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  for (let i = 0; i < N; i++) {
+    for (let d = 1; d <= k; d++) {
+      if (N % 2 === 0 && 2 * d === N && i >= N / 2) continue;
+      const j = (i + d) % N;
+      ctx.moveTo(pos[i][0], pos[i][1]);
+      ctx.lineTo(pos[j][0], pos[j][1]);
+    }
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  for (let i = 0; i < N; i++) {
+    const [x, y] = pos[i];
+    if (halo.has(i)) {
+      ctx.beginPath(); ctx.arc(x, y, nodeR + 4, 0, 2 * Math.PI);
+      ctx.strokeStyle = NODE_HALO; ctx.lineWidth = 3; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(x, y, nodeR, 0, 2 * Math.PI);
+    ctx.fillStyle = nodeColors ? nodeColors[i] : NODE_NEUTRAL; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = '#333'; ctx.stroke();
+  }
+}
+
+/* ---------- matrix ---------- */
+function viewedTheory() {
+  if (!S.cur) return null;
+  if (S.view === 'optimal') return S.cur.opt;
+  const idx = parseInt(S.view, 10);
+  return Number.isInteger(idx) && idx < S.cur.thetas.length ? idx : S.cur.opt;
+}
+
+function renderTheorySelect() {
+  const sel = $('theorySelect');
+  const want = S.cur ? S.cur.thetas.length : 0;
+  if (sel.options.length !== want + 1) {
+    let h = '<option value="optimal">Optimal theory</option>';
+    for (let t = 0; t < want; t++) h += `<option value="${t}">Theory ${t + 1}</option>`;
+    sel.innerHTML = h;
+  }
+  sel.value = S.view;
+}
+
+function runLabel() {
+  return S.curFromBatch ? S.runs.length : S.runs.length + 1;
+}
+
+function renderMatrix() {
+  const N = S.N, KK = K(), d = S.d, run = S.cur;
+  renderTheorySelect();
+  const tIdx = viewedTheory();
+  $('viewing').innerHTML = run
+    ? `Viewing theory: <b>${S.view === 'optimal' ? `Optimal (θ=${run.thetas[run.opt].toFixed(3)})` : `Theory ${tIdx + 1} (θ=${run.thetas[tIdx].toFixed(3)})`}</b> | Rounds so far: <b>${run.rounds}</b>`
+    : '';
+  let h = `<table class="data" id="matrixTable"><thead><tr><th class="agent corner">Run #${runLabel()}</th>`;
+  for (let k = 0; k < KK; k++) {
+    const c = kColor(k, KK);
+    h += `<th class="k-head" data-k="${k}" style="background:${c.fill};color:${c.ink}">k=${k}</th>`;
+  }
+  h += '</tr></thead><tbody>';
+  for (let i = 0; i < N; i++) {
+    h += `<tr data-agent-row="${i}"><th class="agent" data-agent="${i}">Agent ${i + 1}</th>`;
+    for (let k = 0; k < KK; k++) {
+      if (d) {
+        const freq = d.tensor[i][k][tIdx];
+        const cls = (d.luckyByK[k][i] ? 'lucky' : 'unlucky') + (d.bestIdxByK[k][i] === tIdx ? ' bold-cell' : '');
+        let succT = 0, totT = 0;
+        for (const j of neighborhoodIndices(N, i, k)) { succT += run.succ[j][tIdx]; totT += run.tot[j][tIdx]; }
+        h += `<td class="${cls}" data-agent="${i}" data-k="${k}" title="Pooled: ${succT}/${totT}">${totT > 0 ? succT : 0}/${totT > 0 ? totT : 0} (${freq.toFixed(3)})</td>`;
+      } else {
+        h += `<td data-agent="${i}" data-k="${k}">–</td>`;
+      }
+    }
+    h += '</tr>';
+  }
+  h += '</tbody><tfoot><tr><th class="agent">Number of<br>Data-Lucky Agents</th>';
+  for (let k = 0; k < KK; k++) {
+    const c = kColor(k, KK);
+    h += `<td data-k="${k}" style="background:${c.fill};color:${c.ink}">${d ? d.counts[k] : '–'}</td>`;
+  }
+  h += '</tr></tfoot></table>';
+  $('matrix').innerHTML = h;
+}
+
+/* ---------- theory panel ---------- */
+function renderTheoryPanel() {
+  const area = $('theoryArea');
+  if (!S.cur) { area.innerHTML = '<p class="empty">No run yet.</p>'; return; }
+  const run = S.cur, d = S.d, N = S.N, T = run.thetas.length, KK = K();
+  const tIdx = viewedTheory();
+  const meanObs = new Array(T).fill(0);
+  for (let t = 0; t < T; t++) {
+    let sum = 0, denom = 0;
+    for (let i = 0; i < N; i++) { sum += run.succ[i][t]; denom += run.tot[i][t]; }
+    meanObs[t] = denom > 0 ? sum / denom : 0;
+  }
+  const countsByK = Array.from({ length: T }, () => new Array(KK).fill(0));
+  for (let k = 0; k < KK; k++) for (let i = 0; i < N; i++) countsByK[d.bestIdxByK[k][i]][k]++;
+  let h = '<div class="scroll" id="theoryWrap"><table class="data" id="theoryTable"><thead><tr><th>Theory</th><th>True θ</th><th>Global mean obs (k=0)</th>';
+  for (let k = 0; k < KK; k++) {
+    const c = kColor(k, KK);
+    h += `<th class="k-head" data-k="${k}" style="background:${c.fill};color:${c.ink}">Chosen @ k=${k}</th>`;
+  }
+  h += '</tr></thead><tbody>';
+  for (let t = 0; t < T; t++) {
+    const cls = [t === run.opt ? 'opt' : '', t === tIdx && S.view !== 'optimal' ? 'viewed' : ''].join(' ').trim();
+    h += `<tr${cls ? ` class="${cls}"` : ''}><td>${t + 1}${t === run.opt ? ' ★' : ''}</td><td>${run.thetas[t].toFixed(3)}</td><td>${meanObs[t].toFixed(3)}</td>`;
+    for (let k = 0; k < KK; k++) h += `<td data-k="${k}">${countsByK[t][k]}</td>`;
+    h += '</tr>';
+  }
+  h += '</tbody></table></div>';
+  const prev = $('theoryWrap');
+  const scrollTop = prev ? prev.scrollTop : 0;
+  area.innerHTML = h;
+  $('theoryWrap').scrollTop = scrollTop;
+}
+
+/* ---------- variance table ---------- */
+function renderVariance() {
+  const KK = K(), v = varianceByK(S.runs, S.N, KK);
+  let h = '<table class="data" id="varTable"><thead><tr><th>k</th><th>Social</th><th>Modal</th><th>Total</th></tr></thead><tbody>';
+  for (let k = 0; k < KK; k++) {
+    const c = kColor(k, KK), r = v[k];
+    const f = x => r ? x.toFixed(4) : '–';
+    h += `<tr data-k="${k}"><td class="kcell" style="background:${c.fill};color:${c.ink}">k=${k}</td>` +
+         `<td>${f(r && r.social)}</td><td>${f(r && r.modal)}</td><td>${f(r && r.total)}</td></tr>`;
+  }
+  h += '</tbody></table>';
+  $('varWrap').innerHTML = h;
+}
+
+/* ---------- highlights ---------- */
+function applyHighlights() {
+  document.querySelectorAll('.col-hl, .row-hl, .cell-sel').forEach(el => el.classList.remove('col-hl', 'row-hl', 'cell-sel'));
+  const t = $('matrixTable');
+  if (t) {
+    if (S.selK !== null) t.querySelectorAll(`[data-k="${S.selK}"]`).forEach(el => el.classList.add('col-hl'));
+    if (S.selAgent !== null) {
+      const tr = t.querySelector(`tr[data-agent-row="${S.selAgent}"]`);
+      if (tr) tr.classList.add('row-hl');
+    }
+    if (S.selCell) {
+      const td = t.querySelector(`td[data-agent="${S.selCell.i}"][data-k="${S.selCell.k}"]`);
+      if (td) td.classList.add('cell-sel');
+    }
+  }
+  const tt = $('theoryTable');
+  if (tt && S.selK !== null) tt.querySelectorAll(`[data-k="${S.selK}"]`).forEach(el => el.classList.add('col-hl'));
+  netCards.forEach(({ card }) => card.classList.toggle('selected', +card.dataset.k === S.selK));
+  styleLegend($('legend'), S.selK, S.hidden);
+  markHover();
+  document.querySelectorAll('#varTable tbody tr').forEach(tr => tr.classList.toggle('selected', +tr.dataset.k === S.selK));
+  paintNetworks();
+  plot.draw();
+}
+
+function renderAll() {
+  renderMatrix();
+  renderTheoryPanel();
+  renderVariance();
+  plot.setData(sortedSeries(S.runs, K()), S.N);
+  const n = S.runs.length;
+  $('runCount').textContent = `${n} run${n === 1 ? '' : 's'}`;
+  $('resetRuns').hidden = n === 0 && !S.cur;
+  applyHighlights();
+}
+
+function toggleK(k) { S.selK = S.selK === k ? null : k; applyHighlights(); }
+
+/* ---------- cell <-> node linking ---------- */
+// Cell (agent i, column k) and node i on the k network are the same thing:
+// hovering or clicking either one highlights both.
+function sameCell(a, b) { return !!a && !!b && a.i === b.i && a.k === b.k; }
+function setHover(next) {
+  const prev = S.hoverCell;
+  if (sameCell(prev, next) || (!prev && !next)) return;
+  S.hoverCell = next;
+  if (prev) paintNetwork(prev.k);
+  if (next && (!prev || prev.k !== next.k)) paintNetwork(next.k);
+  markHover();
+}
+function markHover() {
+  document.querySelectorAll('.cell-hover, .net-card.hover').forEach(el => el.classList.remove('cell-hover', 'hover'));
+  const h = S.hoverCell;
+  if (!h) return;
+  const td = cellEl(h.i, h.k);
+  if (td) td.classList.add('cell-hover');
+  if (netCards[h.k]) netCards[h.k].card.classList.add('hover');
+}
+function cellEl(i, k) {
+  const t = $('matrixTable');
+  return t ? t.querySelector(`td[data-agent="${i}"][data-k="${k}"]`) : null;
+}
+// Scroll the matrix (not the page) so a cell is visible past the sticky header and first column.
+function revealCell(td) {
+  if (!td) return;
+  const box = $('matrix'), b = box.getBoundingClientRect(), r = td.getBoundingClientRect();
+  const corner = box.querySelector('th.corner'), head = box.querySelector('thead');
+  const left = b.left + (corner ? corner.offsetWidth : 0), top = b.top + (head ? head.offsetHeight : 0);
+  if (r.left < left) box.scrollLeft -= left - r.left;
+  else if (r.right > b.right) box.scrollLeft += r.right - b.right;
+  if (r.top < top) box.scrollTop -= top - r.top;
+  else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
+}
+function nodeAt(canvas, cx, cy) {
+  const g = canvas._geom;
+  if (!g) return null;
+  const r = canvas.getBoundingClientRect(), x = cx - r.left, y = cy - r.top;
+  let best = null, bd = Infinity;
+  g.pos.forEach(([px, py], i) => { const d = Math.hypot(px - x, py - y); if (d < bd) { bd = d; best = i; } });
+  return bd <= Math.max(g.nodeR + 4, 8) ? best : null;
+}
+function toggleCell(i, k) {
+  S.selCell = sameCell(S.selCell, { i, k }) ? null : { i, k };
+  applyHighlights();
+}
+
+function nodeTip(i, k) {
+  let h = `<div class="tt-head">Agent ${i + 1}, k=${k}</div>`;
+  if (S.d) {
+    const best = S.d.bestIdxByK[k][i];
+    h += `<div class="tt-row">Best-supported: Theory ${best + 1}${best === S.cur.opt ? ' ★' : ''}</div>` +
+         `<div class="tt-row">${S.d.luckyByK[k][i] ? 'Data-lucky' : 'Data-unlucky'}</div>`;
+  }
+  return h;
+}
+
+/* ---------- events ---------- */
+['numTheories', 'thetaMean', 'thetaVar', 'trials', 'roundsPerRun', 'population'].forEach(id => $(id).addEventListener('input', onParamChange));
+$('mode').addEventListener('change', onParamChange);
+$('newRun').addEventListener('click', startNewRun);
+$('oneRound').addEventListener('click', () => stepRounds(1));
+$('fullRun').addEventListener('click', () => stepRounds(S.R));
+$('runBatch').addEventListener('click', startBatch);
+$('resetRuns').addEventListener('click', resetRuns);
+$('theorySelect').addEventListener('change', e => {
+  S.view = e.target.value;
+  renderMatrix();
+  renderTheoryPanel();
+  applyHighlights();
+});
+
+const strip = $('netStrip');
+strip.addEventListener('mousemove', e => {
+  const canvas = e.target.closest('canvas.net-canvas');
+  const i = canvas ? nodeAt(canvas, e.clientX, e.clientY) : null;
+  if (i === null) { hideTip(); setHover(null); return; }
+  const k = +canvas.parentElement.dataset.k;
+  setHover({ i, k });
+  revealCell(cellEl(i, k));
+  showTip(nodeTip(i, k), e.clientX, e.clientY);
+});
+strip.addEventListener('mouseleave', () => { hideTip(); setHover(null); });
+strip.addEventListener('click', e => {
+  const canvas = e.target.closest('canvas.net-canvas');
+  const i = canvas ? nodeAt(canvas, e.clientX, e.clientY) : null;
+  if (i !== null) { toggleCell(i, +canvas.parentElement.dataset.k); return; }
+  const card = e.target.closest('.net-card');
+  if (card) toggleK(+card.dataset.k);
+});
+// Legend chips show or hide individual lines.
+$('legend').addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  const k = +chip.dataset.k;
+  if (S.hidden.has(k)) S.hidden.delete(k); else S.hidden.add(k);
+  styleLegend($('legend'), S.selK, S.hidden);
+  plot.draw();
+});
+$('varWrap').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-k]');
+  if (tr) toggleK(+tr.dataset.k);
+});
+$('theoryArea').addEventListener('click', e => {
+  const th = e.target.closest('th.k-head');
+  if (th) toggleK(+th.dataset.k);
+});
+
+const matrixBox = $('matrix');
+matrixBox.addEventListener('mouseover', e => {
+  const td = e.target.closest('td[data-agent][data-k]');
+  setHover(td ? { i: +td.dataset.agent, k: +td.dataset.k } : null);
+});
+matrixBox.addEventListener('mouseleave', () => setHover(null));
+matrixBox.addEventListener('click', e => {
+  const td = e.target.closest('td[data-agent][data-k]');
+  if (td) { toggleCell(+td.dataset.agent, +td.dataset.k); return; }
+  const kh = e.target.closest('th.k-head');
+  if (kh) { toggleK(+kh.dataset.k); return; }
+  const ah = e.target.closest('th[data-agent]');
+  if (ah) {
+    const i = +ah.dataset.agent;
+    S.selAgent = S.selAgent === i ? null : i;
+    applyHighlights();
+  }
+});
+
+/* =====================================================================
+   GRID TAB
+   ===================================================================== */
+const G = { ran: false, job: null, panels: [], hidden: new Set(), N: 10 };
+
+function parseList(str, { int = false, min = -Infinity, max = Infinity } = {}) {
+  const vals = String(str).split(/[\s,;]+/).filter(Boolean).map(Number)
+    .filter(v => Number.isFinite(v) && (!int || Number.isInteger(v)) && v >= min && v <= max);
+  return [...new Set(vals)];
+}
+
+function gridMsg(text) {
+  const el = $('gridMsg');
+  el.hidden = !text;
+  el.textContent = text || '';
+}
+
+function runGrid() {
+  if (G.job) { stopGrid(); return; }
+  const mean = parseFloat($('gMean').value), trials = Number($('gTrials').value), R = Number($('gRounds').value);
+  const N = Number($('gPopulation').value), mode = $('gMode').value, runs = Number($('gRuns').value);
+  const Ts = parseList($('gTheories').value, { int: true, min: 2, max: 1000 }).sort((a, b) => a - b).slice(0, 6);
+  const vars = parseList($('gVars').value, { min: 0, max: 0.25 }).sort((a, b) => a - b).slice(0, 6);
+  if (!Number.isFinite(mean) || mean < 0 || mean > 1) return gridMsg('Avg θ must be between 0 and 1.');
+  if (!Number.isInteger(trials) || trials < 1) return gridMsg('Trials/round must be a whole number of at least 1.');
+  if (!Number.isInteger(R) || R < 1) return gridMsg('Rounds/run must be a whole number of at least 1.');
+  if (!Number.isInteger(N) || N < 3 || N > 400) return gridMsg('Population must be a whole number from 3 to 400.');
+  if (!Number.isInteger(runs) || runs < 1) return gridMsg('Runs per panel must be a whole number of at least 1.');
+  if (!Ts.length) return gridMsg('Enter at least one whole number of theories (2 or more).');
+  if (!vars.length) return gridMsg('Enter at least one Var(θ) between 0 and 0.25.');
+  gridMsg('');
+
+  G.ran = true; G.N = N;
+  const KK = maxKFor(N) + 1;
+  G.hidden = new Set([...G.hidden].filter(k => k < KK));
+  buildLegend($('gLegend'), KK, () => null, G.hidden);
+
+  G.panels.forEach(pl => pl.destroy());
+  G.panels = [];
+  const grid = $('ctgrid');
+  grid.innerHTML = '';
+  grid.style.gridTemplateColumns = `auto repeat(${vars.length}, minmax(110px, 1fr))`;
+  grid.appendChild(document.createElement('div'));
+  for (const v of vars) {
+    const d = document.createElement('div');
+    d.className = 'col-label';
+    d.textContent = `Var(θ) = ${v}`;
+    grid.appendChild(d);
+  }
+  const cells = [];
+  for (const T of Ts) {
+    const rl = document.createElement('div');
+    rl.className = 'row-label';
+    rl.textContent = `${T} theories`;
+    grid.appendChild(rl);
+    for (const v of vars) {
+      const box = document.createElement('div');
+      box.className = 'cell-box';
+      grid.appendChild(box);
+      const pl = new RunsPlot(box, { compact: true, label: `${T} theories, Var(θ) = ${v}`, getHidden: () => G.hidden });
+      G.panels.push(pl);
+      cells.push({ T, variance: v, runs: [], plot: pl });
+    }
+  }
+  G.job = { cells, ci: 0, runs, mean, trials, R, mode, raf: 0, done: 0, total: cells.length * runs };
+  $('runGrid').textContent = 'Stop';
+  $('runGrid').classList.add('stop');
+  setProgress($('gridProgress'), 0);
+  gridTick();
+}
+
+function gridTick() {
+  const job = G.job;
+  if (!job) return;
+  const KK = maxKFor(G.N) + 1;
+  const t0 = performance.now();
+  while (job.ci < job.cells.length && performance.now() - t0 < 30) {
+    const cell = job.cells[job.ci];
+    const run = newRun(cell.T, job.mean, cell.variance, G.N);
+    for (let r = 0; r < job.R; r++) doOneRound(run, job.mode, job.trials);
+    cell.runs.push(luckyCounts(run));
+    job.done++;
+    if (cell.runs.length >= job.runs) {
+      cell.plot.setData(sortedSeries(cell.runs, KK), G.N);
+      job.ci++;
+    }
+  }
+  const cur = job.cells[job.ci];
+  if (cur && cur.runs.length) cur.plot.setData(sortedSeries(cur.runs, KK), G.N);
+  setProgress($('gridProgress'), job.done / job.total);
+  if (job.ci >= job.cells.length) stopGrid();
+  else job.raf = requestAnimationFrame(gridTick);
+}
+
+function stopGrid() {
+  if (!G.job) return;
+  cancelAnimationFrame(G.job.raf);
+  G.job = null;
+  $('runGrid').textContent = 'Run grid';
+  $('runGrid').classList.remove('stop');
+  setProgress($('gridProgress'), null);
+}
+
+function toggleGridK(k) {
+  if (G.hidden.has(k)) G.hidden.delete(k); else G.hidden.add(k);
+  styleLegend($('gLegend'), null, G.hidden);
+  G.panels.forEach(pl => pl.draw());
+}
+
+$('runGrid').addEventListener('click', runGrid);
+$('gLegend').addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if (chip) toggleGridK(+chip.dataset.k);
+});
+
+/* =====================================================================
+   TABS, CLEARING SELECTIONS, STARTUP
+   ===================================================================== */
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+  $('tab-model').hidden = name !== 'model';
+  $('tab-grid').hidden = name !== 'grid';
+  hideTip();
+  if (name === 'grid' && !G.ran) runGrid();
+  if (history.replaceState) history.replaceState(null, '', name === 'grid' ? '#grid' : location.pathname + location.search);
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
+
+// Click on empty space or press Escape to clear selections.
+function clearSelections() {
+  if (S.selK !== null || S.selAgent !== null || S.selCell) {
+    S.selK = null; S.selAgent = null; S.selCell = null;
+    applyHighlights();
+  }
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') clearSelections(); });
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-k], [data-agent], .net-card, button, input, select, label, canvas, a')) return;
+  clearSelections();
+});
+
+window.addEventListener('resize', () => { paintNetworks(); });
+
+onParamChange();
+if (location.hash === '#grid') showTab('grid');
+</script>
+</body>
+</html>
